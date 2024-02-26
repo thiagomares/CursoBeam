@@ -1,4 +1,3 @@
-
 from pyspark.sql import SparkSession
 from datetime import datetime, date
 from pyspark.sql import Row
@@ -13,5 +12,4 @@ df = spark.createDataFrame([
 
 
 spark.conf.set('spark.sql.repl.eagerEval.enabled', True)
->>>>>>> f04f111 (reiniciando o git)
 df.select('a').show()
