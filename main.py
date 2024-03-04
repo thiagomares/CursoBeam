@@ -116,8 +116,9 @@ from typing import List, Dict
     
 """
 
-pipe_opts = PipelineOptions(argc=None) 
+pipe_opts = PipelineOptions(argc=None)
 pipeline = beam.Pipeline(options=pipe_opts)
+
 
 def texto_para_lista(elements: str, delimiter: str = '|'):
     """
@@ -137,6 +138,8 @@ colunas_dengue = [
     'latitude',
     'logitude'
 ]
+
+
 class Teste:
     def lista_dicionario(elemento: str, colunas: List) -> Dict:
         """
@@ -156,29 +159,50 @@ class Teste:
             Esta função irá receber um dicionario e retornar uma tupla (uf, dicionario)
         """
         chave = elemento['uf']
-        return(chave, elemento)
-    
+        return (chave, elemento)
+
     def casos_dengue(elements):
         uf, dados = elements
 
         for dado in dados:
-            yield (f'{uf}-{dado["ano_mes"]}', int(dado['casos']))
+            if dado['casos'] == '':
+                dado['casos'] = 0
+            yield (f'{uf}-{dado["ano_mes"]}', float(dado['casos']))
+
+
+class Chuvas:
+    def lista_tupla(elemento: str):
+        data, mm, uf = elemento
+        mm = 0.0 if float(mm) < 0 else float(mm)
+        yield (f"{uf}-{'-'.join(data.split('-')[:2])}", round(float(mm), 2))
 
 with beam.Pipeline() as pipeline:
     dengue = (
         pipeline
-        | "Leitura do dataset de dengue" >> ReadFromText('./alura-apachebeam-basedados/casos_dengue.txt', skip_header_lines=1) # Nos damos aqui um label e fazemos a leitura de um arquivo de texto com o método de leitura do texto, pulando uma linha de cabeçalho
+        # Nos damos aqui um label e fazemos a leitura de um arquivo de texto com o método de leitura do texto, pulando uma linha de cabeçalho
+        | "Leitura do dataset de dengue" >> ReadFromText('./alura-apachebeam-basedados/casos_dengue.txt', skip_header_lines=1)
         # As Pcollections vai guardar os dados do arquivo ou da fonte que nos utilizamos
         | 'Texto p/ Lista' >> beam.Map(texto_para_lista)
         | "Converte os dados para um dicionário" >> beam.Map(Teste.lista_dicionario, colunas_dengue)
         | "Extrai o ano e o mes" >> beam.Map(Teste.trata_data)
         | "Retorna chave UF" >> beam.Map(Teste.chave_uf)
-        | "Agrupa os dados" >> beam.GroupByKey() #O group by key vai retornar um agrupamento dos dados a partir de uma chave que nos fizemos no passo anterior
+        # O group by key vai retornar um agrupamento dos dados a partir de uma chave que nos fizemos no passo anterior
+        | "Agrupa os dados" >> beam.GroupByKey()
         # A nossa PCollection vai ser uma tupla, onde o primeiro elemento é a chave e o segundo é um iterável com os valores
         | "Calcula casos de dengue" >> beam.FlatMap(Teste.casos_dengue)
-        | "Soma os casos de dengue" >> beam.CombinePerKey(sum) # com o combine per key, nos vamos fazer a soma dos valores que temos para cada chave
+        # com o combine per key, nos vamos fazer a soma dos valores que temos para cada chave
+        | "Soma os casos de dengue" >> beam.CombinePerKey(sum)
         | "Mostra Resultados" >> beam.Map(print)
         # Toda vez que formos utilizar um método externo, nos vamos utilizar um map, para que o beam consiga localizar estes métodos
-)
+    )
+
+    chuvas = (
+        pipeline
+        | "Leitura do dataset de chuvas" >> ReadFromText('./alura-apachebeam-basedados/chuvas.csv', skip_header_lines=1)
+        | "Texto em Lista" >> beam.Map(texto_para_lista, ',')
+        | "Converte para tupla" >> beam.FlatMap(Chuvas.lista_tupla)
+        | "Soma as chuvas" >> beam.CombinePerKey(sum)
+        | "Mostra Resultado" >> beam.Map(print)
+    )
 pipeline.run()
 >>>>>>> f04f111 (reiniciando o git)
